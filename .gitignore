@@ -1,2 +1,4 @@
-/target
+lorenz-line-3d/target
+lorenz-line-2d/target
 **/*.rs.bk
+*.lock

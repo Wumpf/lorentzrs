@@ -54,7 +54,7 @@ fn main() {
         let num_samples = 10000;
         let dt = 0.01;
 
-        let mut prev = Point3::new(1.0f64, 1.0, 1.0);
+        let mut prev = Point3::new(0.0f64, 1.0, 0.0);
         for s in 0..num_samples {
             // Want to try out proper integration, but let's start simple with forward euler and watch it burn.
             //let next = prev + lorenz_eq(prev, sigma, beta, rho) * dt;
