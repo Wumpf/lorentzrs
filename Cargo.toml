@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "lorenz-field-2d",
+    "lorenz-line-3d",
+]
