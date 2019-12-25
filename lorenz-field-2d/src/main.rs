@@ -1,10 +1,12 @@
 extern crate minifb;
 extern crate nalgebra as na;
 extern crate num_traits;
+extern crate rayon;
 
-use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{Key, KeyRepeat, Scale, ScaleMode, Window, WindowOptions};
 use na::{clamp, Point3, Vector3};
 use num_traits::bounds::Bounded;
+use rayon::prelude::*;
 
 fn lorenz_eq(p: Point3<f64>, sigma: f64, beta: f64, rho: f64) -> Vector3<f64> {
     Vector3::new(sigma * (p[1] - p[0]), p[0] * (rho - p[2]) - p[1], p[0] * p[1] - beta * p[2])
@@ -45,6 +47,15 @@ fn pack_rgb(r: f64, g: f64, b: f64) -> u32 {
     bi + (gi << 8) + (ri << 16)
 }
 
+fn update_framebuffer(points: &Vec<Point3<f64>>, buffer: &mut Vec<u32>, bb: &BoundingBox) {
+    buffer.par_iter_mut().zip(points.par_iter()).for_each(|(pix, p)| {
+        let r = (p.x - bb.min.x) / (bb.max.x - bb.min.x);
+        let g = (p.y - bb.min.y) / (bb.max.y - bb.min.y);
+        let b = (p.z - bb.min.z) / (bb.max.z - bb.min.z);
+        *pix = pack_rgb(r, g, b); 
+    });
+}
+
 const WIDTH: usize = 600;
 const HEIGHT: usize = 600;
 
@@ -57,7 +68,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            resize: false,
+            resize: true,
             scale: Scale::X1,
             scale_mode: ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
@@ -69,34 +80,32 @@ fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
     window.set_background_color(0, 0, 0);
 
-    let num_steps = 30;
-    let step_size = 0.1;
+    let step_size = 0.01;
     let sigma = 10.0;
     let beta = 8.0 / 3.0;
     let rho = 28.0;
 
+    // Init points.
     for i in 0..points.len() {
         let x = (i % WIDTH) as f64 / (WIDTH - 1) as f64;
         let y = (i / HEIGHT) as f64 / (HEIGHT - 1) as f64;
-        points[i] = Point3::new(x * 30.0 - 15.0, 1.0, y * 30.0);
-        for _ in 0..num_steps {
-            let step = rk4step(points[i], step_size, |p| lorenz_eq(p, sigma, beta, rho));
-            points[i] += step;
-        }
+        points[i] = Point3::new(x * 30.0 - 15.0, 0.0, y * 30.0);
     }
 
-    let bb = compute_boundingbox(points.iter());
-    println!("min point: {:?}", bb.min);
-    println!("max point: {:?}", bb.max);
-
-    for i in 0..buffer.len() {
-        let r = (points[i].x - bb.min.x) / (bb.max.x - bb.min.x);
-        let g = (points[i].y - bb.min.y) / (bb.max.y - bb.min.y);
-        let b = (points[i].z - bb.min.z) / (bb.max.z - bb.min.z);
-        buffer[i] = pack_rgb(r,g,b);
-    }
+    println!("ready");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        if window.is_key_down(Key::Space) {
+            // compute n steps
+            points.par_iter_mut().for_each(|p| {
+                let step = rk4step(*p, step_size, |p| lorenz_eq(p, sigma, beta, rho));
+                *p += step;
+            });
+
+            let bb = compute_boundingbox(points.iter());
+            //println!("min: {:?} max: {:?}", bb.min, bb.max);
+            update_framebuffer(&points, &mut buffer, &bb);
+        }
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
