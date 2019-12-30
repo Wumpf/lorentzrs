@@ -62,8 +62,8 @@ fn update_framebuffer(points: &Vec<Point3<f64>>, buffer: &mut Vec<u32>, bb: &Bou
     });
 }
 
-const WIDTH: usize = 800;
-const HEIGHT: usize = 800;
+const WIDTH: usize = 1920;
+const HEIGHT: usize = 600;
 
 fn main() {
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
@@ -74,7 +74,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            resize: true,
+            resize: false,
             scale: Scale::X1,
             scale_mode: ScaleMode::AspectRatioStretch,
             ..WindowOptions::default()
@@ -94,14 +94,14 @@ fn main() {
     let mut total_integration = 0.0;
 
     // Init points.
-    let start_bounds = Point3::new(300.0, 0.0, 900.0);
+    let start_bounds = BoundingBox {min:Point3::new(-300.0, 0.0, -1200.0), max:Point3::new(300.0, 0.0, 3000.0) };
     for i in 0..points.len() {
         let x = (i % WIDTH) as f64 / (WIDTH - 1) as f64;
-        let y = (i / HEIGHT) as f64 / (HEIGHT - 1) as f64;
+        let y = (i / WIDTH) as f64 / (HEIGHT - 1) as f64;
         points[i] = Point3::new(
-            x * start_bounds.x * 2.0 - start_bounds.x,
-            start_bounds.y,
-            y * start_bounds.z * 2.0 - start_bounds.z,
+            start_bounds.min.x + y * (start_bounds.max.x - start_bounds.min.x),
+            start_bounds.min.y,
+            start_bounds.min.z + x * (start_bounds.max.z - start_bounds.min.z),
         );
     }
 
