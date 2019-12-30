@@ -3,7 +3,7 @@ extern crate nalgebra as na;
 extern crate num_traits;
 extern crate rayon;
 
-use minifb::{Key, KeyRepeat, Scale, ScaleMode, Window, WindowOptions};
+use minifb::{Key, Scale, ScaleMode, Window, WindowOptions};
 use na::{clamp, Point3, Vector3};
 use num_traits::bounds::Bounded;
 use rayon::prelude::*;
@@ -49,15 +49,21 @@ fn pack_rgb(r: f64, g: f64, b: f64) -> u32 {
 
 fn update_framebuffer(points: &Vec<Point3<f64>>, buffer: &mut Vec<u32>, bb: &BoundingBox) {
     buffer.par_iter_mut().zip(points.par_iter()).for_each(|(pix, p)| {
-        let r = (p.x - bb.min.x) / (bb.max.x - bb.min.x);
-        let g = (p.y - bb.min.y) / (bb.max.y - bb.min.y);
-        let b = (p.z - bb.min.z) / (bb.max.z - bb.min.z);
-        *pix = pack_rgb(r, g, b); 
+        //        let r = (p.x - bb.min.x) / (bb.max.x - bb.min.x);
+        //        let g = (p.y - bb.min.y) / (bb.max.y - bb.min.y);
+        //        let b = (p.z - bb.min.z) / (bb.max.z - bb.min.z);
+        //        let r = (p.x / bb.max.x).abs();
+        //        let g = (p.y / bb.max.y).abs();
+        //        let b = (p.z / bb.max.z).abs();
+        //        *pix = pack_rgb(r, g, b);
+
+        let v = p.coords.norm_squared() / 50.0 / 50.0; // bb.max.coords.norm();
+        *pix = pack_rgb(v * 3.0, v * 3.0 - 1.0, v * 3.0 - 2.0);
     });
 }
 
-const WIDTH: usize = 600;
-const HEIGHT: usize = 600;
+const WIDTH: usize = 800;
+const HEIGHT: usize = 800;
 
 fn main() {
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
@@ -80,23 +86,30 @@ fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
     window.set_background_color(0, 0, 0);
 
-    let step_size = 0.01;
+    let step_size = 0.02;
     let sigma = 10.0;
     let beta = 8.0 / 3.0;
     let rho = 28.0;
 
+    let mut total_integration = 0.0;
+
     // Init points.
+    let start_bounds = Point3::new(300.0, 0.0, 900.0);
     for i in 0..points.len() {
         let x = (i % WIDTH) as f64 / (WIDTH - 1) as f64;
         let y = (i / HEIGHT) as f64 / (HEIGHT - 1) as f64;
-        points[i] = Point3::new(x * 30.0 - 15.0, 0.0, y * 30.0);
+        points[i] = Point3::new(
+            x * start_bounds.x * 2.0 - start_bounds.x,
+            start_bounds.y,
+            y * start_bounds.z * 2.0 - start_bounds.z,
+        );
     }
 
     println!("ready");
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         if window.is_key_down(Key::Space) {
-            // compute n steps
+            total_integration += step_size;
             points.par_iter_mut().for_each(|p| {
                 let step = rk4step(*p, step_size, |p| lorenz_eq(p, sigma, beta, rho));
                 *p += step;
@@ -105,7 +118,15 @@ fn main() {
             let bb = compute_boundingbox(points.iter());
             //println!("min: {:?} max: {:?}", bb.min, bb.max);
             update_framebuffer(&points, &mut buffer, &bb);
+
+            window.set_title(&format!("step: {:.2}", total_integration));
         }
+        let mousepos = window.get_mouse_pos(minifb::MouseMode::Clamp).unwrap_or_default();
+        let hovered_point = points[(mousepos.0 + mousepos.1 * WIDTH as f32) as usize];
+        window.set_title(&format!(
+            "step: {:.2}, ({:.2}, {:.2}, {:.2})",
+            total_integration, hovered_point.x, hovered_point.y, hovered_point.z
+        ));
         window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
